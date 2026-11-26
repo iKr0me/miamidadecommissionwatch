@@ -16,6 +16,13 @@ def extract(pdf):
         lines = (page.extract_text(extraction_mode="layout") or "").splitlines()
         if not any(line.strip() for line in lines):
             warnings.append(f"Page {page_number} has no readable text")
+        # County PDFs frequently place the item and file numbers on separate lines.
+        lines = [line for line in lines if line.strip()]
+        for index in range(len(lines) - 1):
+            if ITEM.fullmatch(lines[index].strip() + " " + lines[index + 1].strip()):
+                if not ITEM.match(lines[index]):
+                    lines[index] += " " + lines[index + 1].strip()
+                    lines[index + 1] = ""
         for line in lines:
             match = ITEM.match(line)
             if match:
