@@ -1,3 +1,39 @@
 <!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>MDCW · Agenda search</title><style>
 *{box-sizing:border-box}body{margin:0;background:#f6f4eb;color:#183459;font:17px/1.55 system-ui}header{background:#10483c;color:white;border-bottom:3px solid #c29235;padding:15px 6%;font:bold 22px Georgia}main{max-width:840px;margin:52px auto;padding:0 20px}h1{font: bold clamp(36px,6vw,58px)/1.1 Georgia;margin-bottom:10px}form{display:flex;gap:8px;margin:24px 0}input,button{padding:13px;border:1px solid #809587;border-radius:6px;font:inherit}input{flex:1;min-width:0}button{background:#10483c;color:white;cursor:pointer}a{color:#105844}article{background:#fffdf5;border-top:2px solid #c29235;padding:18px;margin:16px 0}article p{font-size:15px}b{font: bold 21px Georgia}
-</style><header>Miami-Dade Commission Watch</header><main><h1>Search commission agendas</h1><p>Explore the September 1 and October 20, 2026 county commission agendas.</p><form><input aria-label="Search agenda items" name="q" value="{{query}}" placeholder="Issue, neighborhood, or item number"><button>Search</button></form><p>Try <a href="/?q=affordable+housing+near+West+Flagler">housing near West Flagler</a> or <a href="/?q=11A5">item 11A5</a>.</p>{{results}}</main></html>
+#suggestions a{display:inline-block;margin:4px 10px 4px 0}details{margin-bottom:12px}small{color:#50655c}</style><header>Miami-Dade Commission Watch</header><main><h1>Search commission agendas</h1><p>Explore the September 1 and October 20, 2026 county commission agendas.</p><form><input aria-label="Search agenda items" name="q" value="{{query}}" placeholder="Issue, neighborhood, or item number"><button>Search</button></form><nav id="suggestions" aria-label="Suggested searches"></nav><p>Try <a href="/?q=affordable+housing+near+West+Flagler">housing near West Flagler</a> or <a href="/?q=11A5">item 11A5</a>.</p>{{results}}</main><script>
+const field = document.querySelector('input[name=q]');
+const suggestions = document.querySelector('#suggestions');
+const topics = [
+  [/hous|home|rent|afford|places to live/i, ['Affordable housing near West Flagler','Multifamily housing financing','Housing advocacy services']],
+  [/water|flood|drain/i, ['Stormwater drainage','Water and sewer connection fees']],
+  [/bus|road|trans|traffic/i, ['Public transit funding','Road maintenance']]
+];
+field.addEventListener('input', () => {
+  suggestions.replaceChildren();
+  const query = field.value.trim();
+  if (!query) return;
+  const match = topics.find(([pattern]) => pattern.test(query));
+  if (!match) return;
+  suggestions.append('Try a more specific search: ');
+  for (const label of match[1]) {
+    const link = document.createElement('a');
+    link.href = '/?q=' + encodeURIComponent(label);
+    link.textContent = label;
+    suggestions.append(link, ' ');
+  }
+});
+async function explainResults() {
+  for (const block of document.querySelectorAll('.summary')) {
+    try {
+      const response = await fetch(block.dataset.url);
+      if (!response.ok) throw Error();
+      block.textContent = await response.text();
+      block.previousElementSibling.insertAdjacentHTML('afterend','<small> · AI explanation</small>');
+    } catch {
+      block.textContent = 'Explanation unavailable.';
+      block.nextElementSibling.open = true;
+    }
+  }
+}
+explainResults();
+</script></html>

@@ -46,7 +46,7 @@ class AgendaIndex:
         ranked = []
         for row, similarity in zip(self.rows, scores):
             ident, date, number, page, wording = row
-            if similarity < .2 and ident not in exact:
+            if similarity < .32 and ident not in exact:
                 continue
             score = similarity + .4 * -exact.get(ident,0) / strongest
             if number.lower() == query.strip().lower():
