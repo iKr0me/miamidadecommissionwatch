@@ -12,10 +12,14 @@ from semantic import AgendaIndex
 
 database = sys.argv[1]
 with sqlite3.connect(database) as connection:
-    sample = json.loads(Path(__file__).with_name("november-sample.json").read_text())
-    if not connection.execute("select 1 from items where date=? limit 1", (sample["date"],)).fetchone():
-        connection.execute("insert into items(date,pdf,page,number,file,wording) values(?,?,?,?,?,?)",
-                           tuple(sample[k] for k in ("date","source","page","number","file","description")))
+    archive = json.loads(Path(__file__).with_name("fall-agendas.json").read_text())
+    connection.execute("delete from items where pdf like 'https://%'")
+    for item in archive:
+        prior = connection.execute("select rowid from items where date=? and number=? and file=?",
+                                   (item["date"],item["number"],item["file"])).fetchone()
+        if prior is None:
+            connection.execute("insert into items(date,pdf,page,number,file,wording) values(?,?,0,?,?,?)",
+                               tuple(item[k] for k in ("date","source","number","file","wording")))
     connection.execute("drop table if exists word_forms")
     connection.execute("create virtual table word_forms using fts5(number,file,wording,tokenize='porter unicode61')")
     connection.execute("insert into word_forms(rowid,number,file,wording) select rowid,number,file,wording from items")
@@ -34,15 +38,10 @@ class Preview(BaseHTTPRequestHandler):
         url = urlsplit(self.path)
         with sqlite3.connect(database) as db:
             if url.path.startswith("/pdf/"):
-                row = db.execute("select pdf from items where date=? limit 1",
+                row = db.execute("select pdf from items where date=? and page>0 limit 1",
                                  (url.path[5:],)).fetchone()
                 if not row:
                     return self.send_error(404)
-                if row[0] == sample["source"]:
-                    self.send_response(302)
-                    self.send_header("Location", sample["source"])
-                    self.end_headers()
-                    return
                 return self.respond(Path(row[0]).read_bytes(), "application/pdf")
             if url.path == "/explanation":
                 args = parse_qs(url.query)
@@ -60,7 +59,14 @@ class Preview(BaseHTTPRequestHandler):
             query = parse_qs(url.query).get("q", [""])[0][:250]
             results = []
             for date, number, page, excerpt in index.search(db, query):
-                results.append(f'<article><b>{escape(date)} · Item {escape(number)}</b><p class="summary" data-url="/explanation?date={quote(date)}&amp;item={quote(number)}&amp;page={int(page)}&amp;q={quote(query, safe=chr(0))}">Preparing explanation…</p><details><summary>Agenda excerpt</summary><p>{escape(excerpt)}</p></details><a href="/pdf/{quote(date)}#page={int(page)}" target="_blank">Open agenda · page {int(page)} ↗</a></article>')
+                link = f"/pdf/{quote(date)}#page={int(page)}"
+                label = f"Open agenda · page {int(page)}"
+                if not int(page):
+                    link = db.execute("select pdf from items where date=? and number=? and page=0 and substr(wording,1,40)=? limit 1",
+                                      (date,number,excerpt[:40])).fetchone()
+                    link = link[0] if link else "https://miamidade.democracy.cc/"
+                    label = "Open agenda record"
+                results.append(f'<article><b>{escape(date)} · Item {escape(number)}</b><p class="summary" data-url="/explanation?date={quote(date)}&amp;item={quote(number)}&amp;page={int(page)}&amp;q={quote(query, safe=chr(0))}">Preparing explanation…</p><details><summary>Agenda excerpt</summary><p>{escape(excerpt)}</p></details><a href="{escape(link)}" target="_blank">{label} ↗</a></article>')
             template = Path(__file__).with_name("preview.html").read_text()
             body = template.replace("{{results}}", "".join(results) or ("No matching items." if query else "")).replace("{{query}}", escape(query))
             self.respond(body.encode(), "text/html; charset=utf-8")
