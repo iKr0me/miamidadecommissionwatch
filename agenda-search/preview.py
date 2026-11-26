@@ -12,6 +12,13 @@ from semantic import AgendaIndex
 
 database = sys.argv[1]
 with sqlite3.connect(database) as connection:
+    sample = json.loads(Path(__file__).with_name("november-sample.json").read_text())
+    if not connection.execute("select 1 from items where date=? limit 1", (sample["date"],)).fetchone():
+        connection.execute("insert into items(date,pdf,page,number,file,wording) values(?,?,?,?,?,?)",
+                           tuple(sample[k] for k in ("date","source","page","number","file","description")))
+    connection.execute("drop table if exists word_forms")
+    connection.execute("create virtual table word_forms using fts5(number,file,wording,tokenize='porter unicode61')")
+    connection.execute("insert into word_forms(rowid,number,file,wording) select rowid,number,file,wording from items")
     index = AgendaIndex(connection)
 
 
@@ -31,6 +38,11 @@ class Preview(BaseHTTPRequestHandler):
                                  (url.path[5:],)).fetchone()
                 if not row:
                     return self.send_error(404)
+                if row[0] == sample["source"]:
+                    self.send_response(302)
+                    self.send_header("Location", sample["source"])
+                    self.end_headers()
+                    return
                 return self.respond(Path(row[0]).read_bytes(), "application/pdf")
             if url.path == "/explanation":
                 args = parse_qs(url.query)

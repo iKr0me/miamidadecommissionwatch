@@ -39,7 +39,7 @@ class AgendaIndex:
         tokens = re.findall(r'[a-z0-9]+', concept.lower())
         if not tokens:
             return []
-        exact = dict(db.execute("select rowid,rank from items where items match ? order by rank limit 30",
+        exact = dict(db.execute("select rowid,rank from word_forms where word_forms match ? order by rank limit 30",
                                 (" OR ".join(t for t in tokens if t not in {"a","to","the","near","of"}) or '""',)))
         scores = self.vectors @ self.encode([concept])[0]
         strongest = max([-v for v in exact.values()] or [1])
