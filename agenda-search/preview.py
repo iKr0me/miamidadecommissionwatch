@@ -34,7 +34,7 @@ class Preview(BaseHTTPRequestHandler):
                 return self.respond(Path(row[0]).read_bytes(), "application/pdf")
             if url.path == "/explanation":
                 args = parse_qs(url.query)
-                row = db.execute("select wording from items where date=? and number=? and page=?",
+                row = db.execute("select wording from items where date=? and number=? and cast(page as text)=?",
                                  tuple(args.get(k, [""])[0] for k in ("date", "item", "page"))).fetchone()
                 if not row:
                     return self.send_error(404)
