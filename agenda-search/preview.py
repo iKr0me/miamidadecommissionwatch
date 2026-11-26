@@ -6,9 +6,11 @@ from html import escape
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import urlsplit, parse_qs, quote
-from search import RELATED, STOP
+from semantic import AgendaIndex
 
 database = sys.argv[1]
+with sqlite3.connect(database) as connection:
+    index = AgendaIndex(connection)
 
 
 class Preview(BaseHTTPRequestHandler):
@@ -24,14 +26,9 @@ class Preview(BaseHTTPRequestHandler):
             if url.path != "/":
                 return self.send_error(404)
             query = parse_qs(url.query).get("q", [""])[0][:250]
-            terms = set(re.findall(r"[a-z0-9]+", query.lower())) - STOP
-            tokens = terms.union(*(RELATED.get(word, []) for word in terms))
             results = []
-            if tokens:
-                for date, number, page, excerpt in db.execute(
-                    "select date,number,page,snippet(items,5,'','',' … ',38) from items where items match ? order by rank limit 10",
-                    (" OR ".join(sorted(tokens)),)):
-                    results.append(f'<article><b>{escape(date)} · Item {escape(number)}</b><p>{escape(excerpt)}</p><a href="/pdf/{quote(date)}#page={int(page)}" target="_blank">Open agenda · page {int(page)} ↗</a></article>')
+            for date, number, page, excerpt in index.search(db, query):
+                results.append(f'<article><b>{escape(date)} · Item {escape(number)}</b><p>{escape(excerpt)}</p><a href="/pdf/{quote(date)}#page={int(page)}" target="_blank">Open agenda · page {int(page)} ↗</a></article>')
             template = Path(__file__).with_name("preview.html").read_text()
             body = template.replace("{{results}}", "".join(results) or ("No matching items." if query else "")).replace("{{query}}", escape(query))
             self.respond(body.encode(), "text/html; charset=utf-8")
